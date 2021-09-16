@@ -1,0 +1,192 @@
+```{r}
+library(tidyverse)
+library(rvest) #for scrapping
+
+#Creating a function for scrapping
+scrap_all <- function(domain){
+ 
+#Creating a URL format
+url <- paste0("https://www.trustpilot.com/review/", domain)
+
+#Counting number of reviews
+#Each page have 20 reviews
+totalReviews <- read_html(url) %>%
+    html_node(".headline__review-count") %>%
+    html_text()
+  totalReviews <- as.integer(gsub(",","", totalReviews))
+  
+#Print how many pages will be scrapped
+cat(paste0("The script will run on ", ceiling(totalReviews/20-1), " pages!\n"))
+
+#Read URL
+page <- read_html(url)
+
+#Create a dataframe for entries
+review <-NULL
+ 
+#Read the basic node
+page %>% html_nodes(".review-card") -> review_card
+
+#For first page making a loop
+#URL is different than other pages
+for (k in 1:length(review_card)){
+
+#Scrapping rating  
+  review_card[[k]] %>%
+    html_node(".star-rating") %>%
+    html_node("img") %>%
+    html_attr("alt") -> rating
+
+#Scrapping review title
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>%
+    html_node("h2") %>%
+    html_node("a") %>%
+    html_text() %>%
+    trimws() -> feedback_title
+
+#Scrapping review
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>%
+    html_node("p") %>%
+    html_text() %>%
+    trimws() -> feedback
+  
+#Scrapping name of reviewer
+  review_card[[k]] %>%
+      html_nodes(".consumer-information__name") %>%
+      html_text() %>%
+      trimws() -> name
+
+#Scrapping date of review posted
+  review_card[[k]] %>%
+     html_node(".review-content-header__dates") %>% 
+     html_text() %>% 
+     trimws() %>%
+     gsub("\",\"updatedDate\":null,\"reportedDate\":null\\}","",.) %>%
+     gsub("\\{\"publishedDate\":\"","",.) %>%
+     as.Date() -> date
+  
+#Joining all the variable to one dataframe  
+  review <- rbind(review, tibble(rating = rating,
+                             title = feedback_title,
+                              comment = feedback,
+                             name = name,
+                              date = date))
+}
+#Print page scrapping completed
+print(paste0(1, " page has been scraped"))
+
+#Page two as the next page URL is only one
+page %>% html_node(".AjaxPager") %>% html_nodes("a") %>% html_attr("href") %>% paste0("https://uk.trustpilot.com",.) -> url
+
+page <- read_html(url)
+ 
+page %>% html_nodes(".review-card") -> review_card
+
+for (k in 1:length(review_card)){
+  review_card[[k]] %>%
+    html_node(".star-rating") %>%
+    html_node("img") %>%
+    html_attr("alt") -> rating
+
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>%
+    html_node("h2") %>%
+    html_node("a") %>%
+    html_text() %>%
+    trimws() -> feedback_title
+
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>%
+    html_node("p") %>%
+    html_text() %>%
+    trimws() -> feedback
+  
+  review_card[[k]] %>%
+      html_nodes(".consumer-information__name") %>%
+      html_text() %>%
+      trimws() -> name
+
+  review_card[[k]] %>%
+     html_node(".review-content-header__dates") %>% 
+     html_text() %>% 
+     trimws() %>%
+     gsub("\",\"updatedDate\":null,\"reportedDate\":null\\}","",.) %>%
+     gsub("\\{\"publishedDate\":\"","",.) %>%
+     as.Date() -> date
+  
+  
+  review <- rbind(review, tibble(rating = rating,
+                             title = feedback_title,
+                              comment = feedback,
+                             name = name,
+                              date = date))
+}
+
+print(paste0(2, " page has been scraped"))
+
+#Scrapping pages ahead of 2 as the URL of next page have same location in HTML
+for(i in 3:(round(totalReviews/20)-1)){
+page %>% html_node(".AjaxPager") %>% html_nodes("a") %>% html_attr("href") %>% paste0("https://uk.trustpilot.com",.) -> url
+
+url <- url[2]
+
+page <- read_html(url)
+
+page %>% html_nodes(".review-card") -> review_card
+
+for (k in 1:length(review_card)){
+  review_card[[k]] %>%
+    html_node(".star-rating") %>%
+    html_node("img") %>%
+    html_attr("alt") -> rating
+  
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>% 
+    html_node("h2") %>% 
+    html_node("a") %>% 
+    html_text() %>% 
+    trimws() -> feedback_title
+  
+  review_card[[k]] %>%
+    html_node(".review-content__body") %>% 
+    html_node("p") %>% 
+    html_text() %>% 
+    trimws() -> feedback
+  
+  review_card[[k]] %>%
+      html_nodes(".consumer-information__name") %>%
+      html_text() %>%
+      trimws() -> name
+  
+  review_card[[k]] %>%
+     html_node(".review-content-header__dates") %>% 
+     html_text() %>% 
+     trimws() %>%
+     gsub("\",\"updatedDate\":null,\"reportedDate\":null\\}","",.) %>%
+     gsub("\\{\"publishedDate\":\"","",.) %>%
+     as.Date() -> date
+  
+  review_individual <- tibble(rating = rating,
+                              title = feedback_title,
+                              comment = feedback,
+                              name = name,
+                              date = date)
+  
+  review <- rbind(review, review_individual)
+}
+print(paste0(i, " page has been scraped"))
+}
+
+#Modify rating variable to rating and level of rating
+review <- review %>% separate(rating, c("rating", "level"), sep = ":")
+review <- review %>% mutate(rating = substr(rating, 1,1))
+
+ return(review)
+}
+
+
+##Write the domain of company and enjoy!
+reviews <- scrap_all("coveainsurance.co.uk")
+```
